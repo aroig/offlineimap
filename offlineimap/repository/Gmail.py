@@ -28,13 +28,20 @@ class GmailRepository(IMAPRepository):
     HOSTNAME = "imap.gmail.com"
     # Gmail IMAP server port
     PORT = 993
-    
+
     def __init__(self, reposname, account):
         """Initialize a GmailRepository object."""
         # Enforce SSL usage
         account.getconfig().set('Repository ' + reposname,
                                 'ssl', 'yes')
         IMAPRepository.__init__(self, reposname, account)
+
+        if self.account.getconfboolean('synclabels', 0) and \
+              self.account.getconf('status_backend', 'plain') != 'sqlite':
+            raise OfflineImapError("The Gmail repository needs the sqlite backend to sync labels.\n"
+                                   "To enable it add 'status_backend = sqlite' in the account section",
+                                   OfflineImapError.ERROR.REPO)
+
 
     def gethost(self):
         """Return the server name to connect to.
@@ -71,4 +78,3 @@ class GmailRepository(IMAPRepository):
     def getspamfolder(self):
         #: Gmail also deletes messages upon EXPUNGE in the Spam folder
         return  self.getconf('spamfolder','[Gmail]/Spam')
-
