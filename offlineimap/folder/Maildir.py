@@ -196,7 +196,7 @@ class MaildirFolder(BaseFolder):
         if sorted(self.getmessageuidlist()) != \
                 sorted(statusfolder.getmessageuidlist()):
             return True
-        # Also check for flag changes, it's quick on a Maildir 
+        # Also check for flag changes, it's quick on a Maildir
         for (uid, message) in self.getmessagelist().iteritems():
             if message['flags'] != statusfolder.getmessageflags(uid):
                 return True
@@ -235,7 +235,7 @@ class MaildirFolder(BaseFolder):
         return '%d_%d.%d.%s,U=%d,FMD5=%s%s2,%s' % \
             (timeval, timeseq, os.getpid(), socket.gethostname(),
              uid, self._foldermd5, self.infosep, ''.join(sorted(flags)))
-        
+
     def savemessage(self, uid, content, flags, rtime):
         """Writes a new message, with the specified uid.
 
@@ -263,7 +263,7 @@ class MaildirFolder(BaseFolder):
             fd = os.open(os.path.join(tmpdir, messagename),
                            os.O_EXCL|os.O_CREAT|os.O_WRONLY, 0o666)
         except OSError as e:
-            if e.errno == 17: 
+            if e.errno == 17:
                 #FILE EXISTS ALREADY
                 severity = OfflineImapError.ERROR.MESSAGE
                 raise OfflineImapError("Unique filename %s already existing." %\
@@ -344,11 +344,13 @@ class MaildirFolder(BaseFolder):
         dir_prefix, filename = os.path.split(oldfilename)
         flags = self.getmessageflags(uid)
         filename = self.new_message_filename(new_uid, flags)
+        newfilename = os.path.join(dir_prefix, filename)
         os.rename(os.path.join(self.getfullname(), oldfilename),
-                  os.path.join(self.getfullname(), dir_prefix, filename))
+                  os.path.join(self.getfullname(), newfilename))
         self.messagelist[new_uid] = self.messagelist[uid]
+        self.messagelist[new_uid]['filename'] = newfilename
         del self.messagelist[uid]
-        
+
     def deletemessage(self, uid):
         """Unlinks a message file from the Maildir.
 
@@ -373,4 +375,3 @@ class MaildirFolder(BaseFolder):
                 os.unlink(filepath)
             # Yep -- return.
         del(self.messagelist[uid])
-        
