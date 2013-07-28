@@ -38,6 +38,7 @@ class BaseFolder(object):
             self.ui.debug('', "Filtering out '%s'[%s] due to folderfilter" \
                           % (name, repository))
         # Top level dir name is always ''
+        self.root = None
         self.name = name if not name == self.getsep() else ''
         self.repository = repository
         self.visiblename = repository.nametrans(name)
