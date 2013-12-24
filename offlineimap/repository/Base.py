@@ -116,7 +116,7 @@ class BaseRepository(CustomConfig.ConfigHelperMixin, object):
 
     def getlocaleval(self):
         return self.account.getlocaleval()
-    
+
     def getfolders(self):
         """Returns a list of ALL folders on this server."""
         return []
@@ -258,4 +258,9 @@ class BaseRepository(CustomConfig.ConfigHelperMixin, object):
         """Stop keep alive, but don't bother waiting
         for the threads to terminate."""
         pass
+
+    def getlocalroot(self):
+    	""" Local root folder for storing messages.
+    	Will not be set for remote repositories."""
+        return None
 

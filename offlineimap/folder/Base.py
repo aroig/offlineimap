@@ -15,7 +15,8 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-from offlineimap import threadutil
+from offlineimap import threadutil, emailutil
+from offlineimap import globals
 from offlineimap.ui import getglobalui
 from offlineimap.error import OfflineImapError
 import offlineimap.accounts
@@ -48,6 +49,13 @@ class BaseFolder(object):
         if self.visiblename == self.getsep():
             self.visiblename = ''
         self.config = repository.getconfig()
+        utime_from_message_global = \
+          self.config.getdefaultboolean("general",
+          "utime_from_message", False)
+        repo = "Repository " + repository.name
+        self._utime_from_message = \
+          self.config.getdefaultboolean(repo,
+          "utime_from_message", utime_from_message_global)
 
         # Passes for syncmessagesto
         self.syncmessagesto_passes = [('copying messages'       , self.syncmessagesto_copy),
@@ -70,6 +78,10 @@ class BaseFolder(object):
     def sync_this(self):
         """Should this folder be synced or is it e.g. filtered out?"""
         return self._sync_this
+
+    @property
+    def utime_from_message(self):
+        return self._utime_from_message
 
     def suggeststhreads(self):
         """Returns true if this folder suggests using threads for actions;
@@ -462,6 +474,9 @@ class BaseFolder(object):
             message = None
             flags = self.getmessageflags(uid)
             rtime = self.getmessagetime(uid)
+            if dstfolder.utime_from_message:
+                content = self.getmessage(uid)
+                rtime = emailutil.get_message_date(content, 'Date')
 
             if uid > 0 and dstfolder.uidexists(uid):
                 # dst has message with that UID already, only update status
@@ -505,9 +520,9 @@ class BaseFolder(object):
                 raise # bubble severe errors up
             self.ui.error(e, exc_info()[2])
         except Exception as e:
-            self.ui.error(e, "Copying message %s [acc: %s]:\n %s" %\
-                              (uid, self.accountname,
-                               exc_info()[2]))
+            self.ui.error(e, exc_info()[2],
+              msg="Copying message %s [acc: %s]" %\
+                              (uid, self.accountname))
             raise    #raise on unknown errors, so we can fix those
 
     def syncmessagesto_copy(self, dstfolder, statusfolder):
@@ -539,7 +554,7 @@ class BaseFolder(object):
                 break
             self.ui.copyingmessage(uid, num+1, num_to_copy, self, dstfolder)
             # exceptions are caught in copymessageto()
-            if self.suggeststhreads():
+            if self.suggeststhreads() and not globals.options.singlethreading:
                 self.waitforthread()
                 thread = threadutil.InstanceLimitedThread(\
                     self.getcopyinstancelimit(),

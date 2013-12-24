@@ -15,14 +15,14 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-import email
 import random
 import binascii
 import re
 import time
 from sys import exc_info
 from .Base import BaseFolder
-from offlineimap import imaputil, imaplibutil, OfflineImapError
+from offlineimap import imaputil, imaplibutil, emailutil, OfflineImapError
+from offlineimap import globals
 from offlineimap.imaplib2 import MonthNames
 
 
@@ -57,7 +57,7 @@ class IMAPFolder(BaseFolder):
             imapobj.select(self.getfullname(), readonly = True, force = force)
 
     def suggeststhreads(self):
-        return 1
+        return not globals.options.singlethreading
 
     def waitforthread(self):
         self.imapserver.connectionwait()
@@ -444,21 +444,12 @@ class IMAPFolder(BaseFolder):
         :returns: string in the form of "DD-Mmm-YYYY HH:MM:SS +HHMM"
                   (including double quotes) or `None` in case of failure
                   (which is fine as value for append)."""
+
         if rtime is None:
-            message = email.message_from_string(content)
-            # parsedate returns a 9-tuple that can be passed directly to
-            # time.mktime(); Will be None if missing or not in a valid
-            # format.  Note that indexes 6, 7, and 8 of the result tuple are
-            # not usable.
-            datetuple = email.utils.parsedate(message.get('Date'))
-            if datetuple is None:
-                #could not determine the date, use the local time.
+            rtime = emailutil.get_message_date(content)
+            if rtime == None:
                 return None
-            #make it a real struct_time, so we have named attributes
-            datetuple = time.struct_time(datetuple)
-        else:
-            #rtime is set, use that instead
-            datetuple = time.localtime(rtime)
+        datetuple = time.localtime(rtime)
 
         try:
             # Check for invalid dates
@@ -574,7 +565,21 @@ class IMAPFolder(BaseFolder):
                     (typ, dat) = imapobj.append(self.getfullname(),
                                        imaputil.flagsmaildir2imap(flags),
                                        date, content)
-                    retry_left = 0                # Mark as success
+                    # This should only catch 'NO' responses since append()
+                    # will raise an exception for 'BAD' responses:
+                    if typ != 'OK':
+                        # For example, Groupwise IMAP server can return something like:
+                        #
+                        #   NO APPEND The 1500 MB storage limit has been exceeded.
+                        #
+                        # In this case, we should immediately abort the repository sync
+                        # and continue with the next account.
+                        msg = \
+                            "Saving msg in folder '%s', repository '%s' failed (abort). " \
+                            "Server responded: %s %s\n" % \
+                            (self, self.getrepository(), typ, dat)
+                        raise OfflineImapError(msg, OfflineImapError.ERROR.REPO)
+                    retry_left = 0 # Mark as success
                 except imapobj.abort as e:
                     # connection has been reset, release connection and retry.
                     retry_left -= 1

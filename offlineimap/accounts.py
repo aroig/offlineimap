@@ -15,6 +15,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 from offlineimap import mbnames, CustomConfig, OfflineImapError
+from offlineimap import globals
 from offlineimap.repository import Repository
 from offlineimap.ui import getglobalui
 from offlineimap.threadutil import InstanceLimitedThread
@@ -321,13 +322,16 @@ class SyncableAccount(Account):
                     self.ui.debug('', "Not syncing filtered folder '%s'"
                                  "[%s]" % (localfolder, localfolder.repository))
                     continue # Ignore filtered folder
-                thread = InstanceLimitedThread(\
-                    instancename = 'FOLDER_' + self.remoterepos.getname(),
-                    target = syncfolder,
-                    name = "Folder %s [acc: %s]" % (remotefolder, self),
-                    args = (self, remotefolder, quick))
-                thread.start()
-                folderthreads.append(thread)
+                if not globals.options.singlethreading:
+                    thread = InstanceLimitedThread(\
+                        instancename = 'FOLDER_' + self.remoterepos.getname(),
+                        target = syncfolder,
+                        name = "Folder %s [acc: %s]" % (remotefolder, self),
+                        args = (self, remotefolder, quick))
+                    thread.start()
+                    folderthreads.append(thread)
+                else:
+                    syncfolder(self, remotefolder, quick)
             # wait for all threads to finish
             for thr in folderthreads:
                 thr.join()
@@ -372,8 +376,7 @@ class SyncableAccount(Account):
             self.ui.error(e, exc_info()[2], msg = "Calling hook")
 
 def syncfolder(account, remotefolder, quick):
-    """This function is called as target for the
-    InstanceLimitedThread invokation in SyncableAccount.
+    """Synchronizes given remote folder for the specified account.
 
     Filtered folders on the remote side will not invoke this function."""
     remoterepos = account.remoterepos
@@ -387,7 +390,8 @@ def syncfolder(account, remotefolder, quick):
         localfolder = account.get_local_folder(remotefolder)
 
         # Write the mailboxes
-        mbnames.add(account.name, localfolder.getname())
+        mbnames.add(account.name, localfolder.getname(),
+          localrepos.getlocalroot())
 
         # Load status folder.
         statusfolder = statusrepos.getfolder(remotefolder.getvisiblename().\
