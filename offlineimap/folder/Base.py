@@ -33,11 +33,8 @@ class BaseFolder(object):
         :para repository: Repository() in which the folder is.
         """
         self.ui = getglobalui()
-        """Should this folder be included in syncing?"""
-        self._sync_this = repository.should_sync_folder(name)
-        if not self._sync_this:
-            self.ui.debug('', "Filtering out '%s'[%s] due to folderfilter" \
-                          % (name, repository))
+        # Save original name for folderfilter operations
+        self.ffilter_name = name
         # Top level dir name is always ''
         self.root = None
         self.name = name if not name == self.getsep() else ''
@@ -48,6 +45,7 @@ class BaseFolder(object):
         # return for the top-level dir.
         if self.visiblename == self.getsep():
             self.visiblename = ''
+
         self.config = repository.getconfig()
         utime_from_message_global = \
           self.config.getdefaultboolean("general",
@@ -56,6 +54,18 @@ class BaseFolder(object):
         self._utime_from_message = \
           self.config.getdefaultboolean(repo,
           "utime_from_message", utime_from_message_global)
+
+        # Determine if we're running static or dynamic folder filtering
+        # and check filtering status
+        self._dynamic_folderfilter = \
+          self.config.getdefaultboolean(repo, "dynamic_folderfilter", False)
+        self._sync_this = repository.should_sync_folder(self.ffilter_name)
+        if self._dynamic_folderfilter:
+            self.ui.debug('', "Running dynamic folder filtering on '%s'[%s]" \
+                          % (self.ffilter_name, repository))
+        elif not self._sync_this:
+            self.ui.debug('', "Filtering out '%s'[%s] due to folderfilter" \
+                          % (self.ffilter_name, repository))
 
         # Passes for syncmessagesto
         self.syncmessagesto_passes = [('copying messages'       , self.syncmessagesto_copy),
@@ -77,7 +87,10 @@ class BaseFolder(object):
     @property
     def sync_this(self):
         """Should this folder be synced or is it e.g. filtered out?"""
-        return self._sync_this
+        if not self._dynamic_folderfilter:
+            return self._sync_this
+        else:
+            return self.repository.should_sync_folder(self.ffilter_name)
 
     @property
     def utime_from_message(self):
