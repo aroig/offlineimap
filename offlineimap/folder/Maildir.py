@@ -277,18 +277,26 @@ class MaildirFolder(BaseFolder):
             uid, self._foldermd5, self.infosep, ''.join(sorted(flags)))
 
 
-    def save_to_tmp_file(self, filename, content):
+    def save_to_tmp_file(self, content, uid, flags, rtime):
         """Saves given content to the named temporary file in the
         'tmp' subdirectory of $CWD.
 
         Arguments:
-        - filename: name of the temporary file;
         - content: data to be saved.
+        - uid: message uid.
+        - flags: message flags.
+        - rtime: message rtime.
 
         Returns: relative path to the temporary file
         that was created."""
 
+        # Make sure rtime is the internal date, so it can be put in the filename
+        if rtime is None:
+            rtime = emailutil.get_message_date(content)
+
+        filename = self.new_message_filename(uid, flags, rtime=rtime)
         tmpname = os.path.join('tmp', filename)
+
         # open file and write it out
         tries = 7
         while tries:
@@ -316,6 +324,10 @@ class MaildirFolder(BaseFolder):
             os.fsync(fd)
         fd.close()
 
+        # set the mtime of the written file
+        if rtime != None:
+            os.utime(os.path.join(self.getfullname(), tmpname), (rtime, rtime))
+
         return tmpname
 
 
@@ -340,14 +352,7 @@ class MaildirFolder(BaseFolder):
 
         # Otherwise, save the message in tmp/ and then call savemessageflags()
         # to give it a permanent home.
-        tmpdir = os.path.join(self.getfullname(), 'tmp')
-        # Make sure rtime is the internal date, so it can be put in the filename
-        if rtime is None:
-            rtime = emailutil.get_message_date(content)
-        messagename = self.new_message_filename(uid, flags, rtime=rtime)
-        tmpname = self.save_to_tmp_file(messagename, content)
-        if rtime != None:
-            os.utime(os.path.join(self.getfullname(), tmpname), (rtime, rtime))
+        tmpname = self.save_to_tmp_file(content, uid, flags, rtime)
 
         self.messagelist[uid] = self.msglist_item_initializer(uid)
         self.messagelist[uid]['flags'] = flags

@@ -21,7 +21,7 @@ from sys import exc_info
 from .Maildir import MaildirFolder
 from offlineimap import OfflineImapError
 import offlineimap.accounts
-from offlineimap import imaputil
+from offlineimap import imaputil, emailutil
 
 class GmailMaildirFolder(MaildirFolder):
     """Folder implementation to support adding labels to messages in a Maildir.
@@ -159,11 +159,8 @@ class GmailMaildirFolder(MaildirFolder):
         content = self.deletemessageheaders(content, self.labelsheader)
         content = self.addmessageheader(content, '\n', self.labelsheader, labels_str)
 
-        rtime = self.messagelist[uid].get('rtime', None)
-
         # write file with new labels to a unique file in tmp
-        messagename = self.new_message_filename(uid, set())
-        tmpname = self.save_to_tmp_file(messagename, content)
+        tmpname = self.save_to_tmp_file(content, uid, set(), None)
         tmppath = os.path.join(self.getfullname(), tmpname)
 
         # move to actual location
@@ -173,9 +170,6 @@ class GmailMaildirFolder(MaildirFolder):
             raise OfflineImapError("Can't rename file '%s' to '%s': %s" % \
               (tmppath, filepath, e[1]), OfflineImapError.ERROR.FOLDER), \
               None, exc_info()[2]
-
-        if rtime != None:
-            os.utime(filepath, (rtime, rtime))
 
         # save the new mtime and labels
         self.messagelist[uid]['mtime'] = long(os.stat(filepath).st_mtime)
